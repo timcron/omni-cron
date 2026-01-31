@@ -95,32 +95,18 @@ void main() {
 `;
 
 function getSettingsFromDataAttributes(element) {
-  if (!(element instanceof HTMLElement) || !element.dataset) {
-    return {};
-  }
+  if (!(element instanceof HTMLElement) || !element.dataset) return {};
   const settings = {};
   const data = element.dataset;
   for (const key in data) {
-    if (Object.hasOwnProperty.call(data, key)) {
-      let value = data[key];
-      const parsedValue = parseFloat(value);
-      if (!isNaN(parsedValue) && isFinite(parsedValue)) {
-        if (value.indexOf('.') === -1 && parsedValue === Math.floor(parsedValue)) {
-          settings[key] = parseInt(value, 10);
-        } else {
-          settings[key] = parsedValue;
-        }
-      } else {
-        if (value === 'true') settings[key] = true;
-        else if (value === 'false') settings[key] = false;
-        else {
-          try {
-            settings[key] = JSON.parse(value);
-          } catch (e) {
-            settings[key] = value;
-          }
-        }
-      }
+    let value = data[key];
+    const parsedValue = parseFloat(value);
+    if (!isNaN(parsedValue) && isFinite(parsedValue)) {
+      settings[key] = (value.indexOf('.') === -1 && parsedValue === Math.floor(parsedValue)) ? parseInt(value, 10) : parsedValue;
+    } else if (value === 'true') settings[key] = true;
+    else if (value === 'false') settings[key] = false;
+    else {
+      try { settings[key] = JSON.parse(value); } catch (e) { settings[key] = value; }
     }
   }
   return settings;
@@ -144,18 +130,9 @@ class ColorBendsPureJS {
   constructor(container, settings) {
     this.container = container;
     this.settings = {
-      rotation: 45,
-      speed: 0.2,
-      colors: [],
-      transparent: true,
-      autoRotate: 0,
-      scale: 1,
-      frequency: 1,
-      warpStrength: 1,
-      mouseInfluence: 1,
-      parallax: 0.5,
-      noise: 0.1,
-      ...settings
+      rotation: 45, speed: 0.2, colors: [], transparent: true, autoRotate: 0,
+      scale: 1, frequency: 1, warpStrength: 1, mouseInfluence: 1,
+      parallax: 0.5, noise: 0.1, ...settings
     };
 
     this.scene = null;
@@ -165,6 +142,7 @@ class ColorBendsPureJS {
     this.mesh = null;
     this.rafId = null;
     this.resizeObserver = null;
+    this.isVisible = false; // Состояние видимости
     this.clock = new THREE.Clock();
     
     this.pointerTarget = new THREE.Vector2(0, 0);
@@ -211,19 +189,13 @@ class ColorBendsPureJS {
     this.mesh = new THREE.Mesh(geometry, this.material);
     this.scene.add(this.mesh);
 
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: false,
-      powerPreference: 'high-performance',
-      alpha: true
-    });
-    
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', alpha: true });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.setClearColor(0x000000, isTransparent ? 0 : 1);
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
     this.renderer.domElement.style.display = 'block';
-    
     this.container.appendChild(this.renderer.domElement);
 
     this.handleResize = this.handleResize.bind(this);
@@ -240,8 +212,21 @@ class ColorBendsPureJS {
     }
 
     this.container.addEventListener('pointermove', this.handlePointerMove);
+
+    // Умная пауза через IntersectionObserver
+    this.observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const wasVisible = this.isVisible;
+        this.isVisible = entry.isIntersecting;
+        if (this.isVisible && !wasVisible) {
+          this.loop(); // Запускаем цикл, когда блок появился
+        } else if (!this.isVisible) {
+          cancelAnimationFrame(this.rafId); // Стоп, если блок ушел
+        }
+      });
+    }, { threshold: 0.05 });
     
-    this.loop();
+    this.observer.observe(this.container);
   }
 
   updateUniforms(newSettings) {
@@ -259,7 +244,6 @@ class ColorBendsPureJS {
 
   updateColors() {
     if (!this.material) return;
-
     const toVec3 = hex => {
       const h = hex.replace('#', '').trim();
       const v = h.length === 3
@@ -267,10 +251,8 @@ class ColorBendsPureJS {
         : [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
       return new THREE.Vector3(v[0] / 255, v[1] / 255, v[2] / 255);
     };
-
     const colorsList = Array.isArray(this.settings.colors) ? this.settings.colors : [];
     const arr = colorsList.filter(Boolean).slice(0, MAX_COLORS).map(toVec3);
-
     for (let i = 0; i < MAX_COLORS; i++) {
       const vec = this.material.uniforms.uColors.value[i];
       if (i < arr.length) vec.copy(arr[i]);
@@ -289,70 +271,43 @@ class ColorBendsPureJS {
   getPointerPosition(e) {
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     const zoom = getTotalZoom(this.container);
-
     const cssW = this.container.offsetWidth || 1;
     const cssH = this.container.offsetHeight || 1;
-
     const canvasW = this.renderer.domElement.width;
     const canvasH = this.renderer.domElement.height;
     const dpr = window.devicePixelRatio || 1;
-
     const canvasVisualWidth = canvasW / dpr;
     const canvasVisualHeight = canvasH / dpr;
-
     let x, y;
-
     if (isSafari) {
-      const rawX = e.offsetX;
-      const rawY = e.offsetY;
-      
-      const logicalX = rawX / zoom;
-      const logicalY = rawY / zoom;
-
-      const clampedX = Math.max(0, Math.min(cssW, logicalX));
-      const clampedY = Math.max(0, Math.min(cssH, logicalY));
-
-      x = (clampedX / cssW) * canvasVisualWidth;
-      y = (clampedY / cssH) * canvasVisualHeight;
+      x = (Math.max(0, Math.min(cssW, e.offsetX / zoom)) / cssW) * canvasVisualWidth;
+      y = (Math.max(0, Math.min(cssH, e.offsetY / zoom)) / cssH) * canvasVisualHeight;
     } else {
       const rect = this.container.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
-
-      const scaleX = canvasVisualWidth / rect.width;
-      const scaleY = canvasVisualHeight / rect.height;
-
-      x = (e.clientX - rect.left) * scaleX;
-      y = (e.clientY - rect.top) * scaleY;
+      x = (e.clientX - rect.left) * (canvasVisualWidth / rect.width);
+      y = (e.clientY - rect.top) * (canvasVisualHeight / rect.height);
     }
     return { x, y };
   }
 
   handlePointerMove(e) {
     const { x, y } = this.getPointerPosition(e);
-    
     const w = this.renderer.domElement.width / (window.devicePixelRatio || 1);
     const h = this.renderer.domElement.height / (window.devicePixelRatio || 1);
-
-    const ndcX = (x / w) * 2 - 1;
-    const ndcY = -((y / h) * 2 - 1); 
-    
-    this.pointerTarget.set(ndcX, ndcY);
+    this.pointerTarget.set((x / w) * 2 - 1, -((y / h) * 2 - 1));
   }
 
   loop() {
+    if (!this.isVisible) return; // Полная остановка, если не в кадре
+
     const dt = this.clock.getDelta();
     const elapsed = this.clock.elapsedTime;
-    
     this.material.uniforms.uTime.value = elapsed;
-
     const deg = (this.settings.rotation % 360) + this.settings.autoRotate * elapsed;
     const rad = (deg * Math.PI) / 180;
-    const c = Math.cos(rad);
-    const s = Math.sin(rad);
-    this.material.uniforms.uRot.value.set(c, s);
-
-    const amt = Math.min(1, dt * this.pointerSmooth);
-    this.pointerCurrent.lerp(this.pointerTarget, amt);
+    this.material.uniforms.uRot.value.set(Math.cos(rad), Math.sin(rad));
+    this.pointerCurrent.lerp(this.pointerTarget, Math.min(1, dt * this.pointerSmooth));
     this.material.uniforms.uPointer.value.copy(this.pointerCurrent);
 
     this.renderer.render(this.scene, this.camera);
@@ -362,15 +317,12 @@ class ColorBendsPureJS {
   dispose() {
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     if (this.resizeObserver) this.resizeObserver.disconnect();
-    else window.removeEventListener('resize', this.handleResize);
-
+    if (this.observer) this.observer.disconnect();
     this.container.removeEventListener('pointermove', this.handlePointerMove);
-
     if (this.mesh) {
         if (this.mesh.geometry) this.mesh.geometry.dispose();
         if (this.mesh.material) this.mesh.material.dispose();
     }
-    
     if (this.renderer) {
         this.renderer.dispose();
         if (this.renderer.domElement && this.renderer.domElement.parentElement === this.container) {
@@ -384,18 +336,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const containers = document.querySelectorAll('.color-bends-container');
   containers.forEach((container) => {
     const settings = getSettingsFromDataAttributes(container);
-
     const parentDiv = container.parentElement;
     if (parentDiv) {
       parentDiv.style.position = 'absolute';
-      parentDiv.style.top = '0';
-      parentDiv.style.bottom = '0';
-      parentDiv.style.left = '0';
-      parentDiv.style.right = '0';
-      parentDiv.style.height = '100%';
-      parentDiv.style.minHeight = '100%';
+      parentDiv.style.top = '0'; parentDiv.style.bottom = '0';
+      parentDiv.style.left = '0'; parentDiv.style.right = '0';
+      parentDiv.style.height = '100%'; parentDiv.style.minHeight = '100%';
     }
-
     if (container) new ColorBendsPureJS(container, settings);
-  })
+  });
 });
