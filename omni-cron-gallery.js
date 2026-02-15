@@ -143,12 +143,11 @@
       block.insertBefore(inner, block.firstChild);
     }
 
-    /* --- КРИТИЧЕСКОЕ ИЗМЕНЕНИЕ ДЛЯ ДУБЛИРОВАНИЯ --- */
-    // Мы ограничиваем область поиска карточек текущим блоком .t-rec
+
     const scope = block.closest('.t-rec');
     if (!scope) return; 
 
-    // Собираем карточки ТОЛЬКО внутри текущего блока t-rec
+
     let allCandidates = Array.from(scope.querySelectorAll(cfg.cardSelector));
     const candidatesToMove = allCandidates.filter(el => !inner.contains(el));
 
