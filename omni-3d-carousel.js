@@ -1,5 +1,3 @@
-
-
 (function() {
   'use strict';
 
@@ -80,43 +78,8 @@
     } catch (e) {}
   }
 
-  function placeCarouselInsideParentIfNeeded(block, cfg) {
-    if (!cfg.placeInsideParent) return;
-    const parent = block.parentElement;
-    if (!parent) return;
-    try {
-      const pStyle = getComputedStyle(parent);
-      if (pStyle.position === 'static') parent.style.position = 'relative';
-      if (block.parentElement !== parent) parent.appendChild(block);
-      block.style.position = 'absolute';
-      block.style.transform = 'none';
-      block.style.transformOrigin = 'center center';
-      block.style.pointerEvents = 'auto';
-      function centerByPixels() {
-        const pRect = parent.getBoundingClientRect();
-        const bRect = block.getBoundingClientRect();
-        if (!pRect || pRect.height < 2) return;
-        const parentInnerW = parent.clientWidth;
-        const parentInnerH = parent.clientHeight;
-        const bW = block.offsetWidth || bRect.width;
-        const bH = block.offsetHeight || bRect.height;
-        block.style.left = Math.max(0, Math.round((parentInnerW - bW) / 2)) + 'px';
-        block.style.top = Math.max(0, Math.round((parentInnerH - bH) / 2)) + 'px';
-      }
-      centerByPixels();
-      Array.from(block.querySelectorAll('img')).forEach(img => {
-        if (!img.complete) img.addEventListener('load', centerByPixels, { once: true });
-      });
-    } catch (e) {}
-  }
-
   function initCarousel(block) {
     ensureInjectedStyles();
-    const cfgInit = Object.assign({}, OMNI_3D_DEFAULTS);
-    if (block.dataset && block.dataset.placeInsideParent !== undefined) {
-      cfgInit.placeInsideParent = block.dataset.placeInsideParent === 'true';
-    }
-    placeCarouselInsideParentIfNeeded(block, cfgInit);
 
     const data = block.dataset;
     const cfg = Object.assign({}, OMNI_3D_DEFAULTS);
@@ -129,9 +92,8 @@
       }
     });
 
-    let inner = block.querySelector('.omni-3d-inner');
-    if (!inner) {
-      inner = document.createElement('div');
+    let inner = block.querySelector('.omni-3d-inner') || document.createElement('div');
+    if (!inner.parentElement) {
       inner.className = 'omni-3d-inner';
       block.insertBefore(inner, block.firstChild);
     }
@@ -143,31 +105,21 @@
       inner.appendChild(el);
     });
 
-    const stage = inner;
-    let cards = Array.from(stage.querySelectorAll(cfg.cardSelector));
-    if (!stage || cards.length === 0) return;
-
-    Array.from(stage.querySelectorAll('.omni-3d-row')).forEach(r => {
-      Array.from(r.children).forEach(ch => stage.appendChild(ch));
-      r.remove();
-    });
-
     const rows = Math.max(1, cfg.rows);
     const rowsContainers = [];
     for (let r = 0; r < rows; r++) {
       const rowDiv = document.createElement('div');
       rowDiv.className = 'omni-3d-row';
-      stage.appendChild(rowDiv);
+      inner.appendChild(rowDiv);
       rowsContainers.push(rowDiv);
     }
 
-    cards = Array.from(stage.querySelectorAll(cfg.cardSelector));
+    let cards = Array.from(inner.querySelectorAll(cfg.cardSelector));
     cards.forEach((card, idx) => {
       rowsContainers[idx % rows].appendChild(card);
-      card.classList.add('omni-card--mounted');
     });
 
-    // --- Core Math Engine ---
+    // --- Оригинальная математика вращения ---
     let angle = cfg.startAngle;
     let velocity = 0;
     let lastTime = performance.now();
@@ -177,28 +129,30 @@
     function positionCards() {
       const rect = block.getBoundingClientRect();
       const minSide = Math.min(rect.width, rect.height);
-      let radiusPx = (parseUnit(cfg.radius).u === '%') ? minSide * (parseUnit(cfg.radius).v / 100) : parseUnit(cfg.radius).v;
+      const r_val = parseUnit(cfg.radius);
+      let r_px = (r_val.u === '%') ? minSide * (r_val.v / 100) : r_val.v;
       
-      const cardW = (parseUnit(cfg.cardWidth).u === '%') ? rect.width * (parseUnit(cfg.cardWidth).v / 100) : parseUnit(cfg.cardWidth).v;
-      const cardH = (parseUnit(cfg.cardHeight).u === '%') ? rect.height * (parseUnit(cfg.cardHeight).v / 100) : parseUnit(cfg.cardHeight).v;
+      const cW_val = parseUnit(cfg.cardWidth);
+      const cH_val = parseUnit(cfg.cardHeight);
+      const cardW = (cW_val.u === '%') ? rect.width * (cW_val.v / 100) : cW_val.v;
+      const cardH = (cH_val.u === '%') ? rect.height * (cH_val.v / 100) : cH_val.v;
 
       rowsContainers.forEach((rDiv, rIdx) => {
         const rowCards = Array.from(rDiv.querySelectorAll(cfg.cardSelector));
         const m = rowCards.length;
         const verticalOffset = (rIdx - (rows - 1) / 2) * (cardH * cfg.rowGap);
-        const angularStepDeg = 360 / m;
+        const step = 360 / m;
 
         rowCards.forEach((card, i) => {
-          const localT = (i * angularStepDeg) + cfg.gap;
-          const theta = (localT + angle) * Math.PI / 180;
-          const x = Math.sin(theta) * radiusPx;
-          const z = Math.cos(theta) * radiusPx;
+          const theta = (angle + (i * step)) * Math.PI / 180;
+          const x = Math.sin(theta) * r_px;
+          const z = Math.cos(theta) * r_px;
 
           card.style.width = cardW + 'px';
           card.style.height = cardH + 'px';
-          card.style.transform = `translate(-50%,-50%) translateX(${x}px) translateY(${verticalOffset}px) translateZ(${z}px) rotateY(${localT + angle}deg)`;
+          card.style.transform = `translate(-50%,-50%) translateX(${x}px) translateY(${verticalOffset}px) translateZ(${z}px) rotateY(${angle + (i * step)}deg)`;
           card.style.zIndex = Math.round(1000 + z);
-          card.style.opacity = 0.45 + 0.55 * (z / radiusPx + 1) / 2;
+          card.style.opacity = 0.45 + 0.55 * (z / r_px + 1) / 2;
         });
       });
     }
@@ -207,27 +161,9 @@
       const dt = now - lastTime;
       lastTime = now;
       if (cfg.autoRotate && !dragging) angle += (cfg.rotateSpeed * dt / 1000);
-      if (Math.abs(velocity) > 0.01) {
-          angle += velocity;
-          velocity *= cfg.inertia;
-      }
       positionCards();
       requestAnimationFrame(frame);
     }
-
-    block.addEventListener('pointerdown', e => {
-      dragging = true;
-      lastX = e.clientX;
-    });
-    window.addEventListener('pointermove', e => {
-      if (!dragging) return;
-      const dx = e.clientX - lastX;
-      lastX = e.clientX;
-      velocity = dx * 0.5;
-      angle += velocity;
-    });
-    window.addEventListener('pointerup', () => dragging = false);
-
     requestAnimationFrame(frame);
   }
 
