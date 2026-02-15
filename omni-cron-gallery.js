@@ -64,8 +64,6 @@
     style.appendChild(document.createTextNode(css));
     (document.head || document.documentElement).appendChild(style);
   }
-
-  // Disable drag on images robustly
   function preventImageDrag(img) {
     try { img.draggable = false; } catch(e){}
     const onDragStart = (ev) => { ev.preventDefault(); };
@@ -93,10 +91,8 @@
         parent.style.position = 'relative';
       }
 
-      // ensure block is child of parent
       if (block.parentElement !== parent) parent.appendChild(block);
 
-      // base absolute positioning
       block.style.position = 'absolute';
       block.style.transform = 'none';
       block.style.transformOrigin = 'center center';
@@ -104,7 +100,6 @@
       if (!block.style.width) block.style.maxWidth = '100%';
       if (!block.style.height) block.style.maxHeight = '100%';
 
-      // centering function using pixel math (more predictable than translate% in some browsers)
       function centerByPixels() {
         const pRect = parent.getBoundingClientRect();
         const bRect = block.getBoundingClientRect();
@@ -133,10 +128,8 @@
         block.style.transform = 'none';
       }
 
-      // run once initially
       centerByPixels();
 
-      // also run on images load in case block size depends on images
       Array.from(block.querySelectorAll('img')).forEach(img => {
         if (!img.complete) img.addEventListener('load', centerByPixels, { once: true });
       });
@@ -153,7 +146,6 @@
   function initCarousel(block) {
     ensureInjectedStyles();
 
-    // place carousel inside parent (if appropriate) — read early flag
     const cfgInit = Object.assign({}, OMNI_3D_DEFAULTS);
     if (block.dataset && block.dataset.placeInsideParent !== undefined) {
       cfgInit.placeInsideParent = block.dataset.placeInsideParent === 'true';
@@ -205,7 +197,6 @@
     if (data.rotateY !== undefined) cfg.rotateY = parseFloat(data.rotateY) || 0;
     if (data.rotateZ !== undefined) cfg.rotateZ = parseFloat(data.rotateZ) || 0;
 
-    // create inner wrapper (stage)
     let inner = block.querySelector('.omni-3d-inner');
     if (!inner) {
       inner = document.createElement('div');
@@ -221,8 +212,6 @@
       inner.style.pointerEvents = 'none';
       block.insertBefore(inner, block.firstChild);
     }
-
-    // collect candidate cards in document and move those that are not inside this inner
     let allCandidates;
     try { allCandidates = Array.from(document.querySelectorAll(cfg.cardSelector)); } catch (e) { allCandidates = []; }
     const candidatesToMove = allCandidates.filter(el => !inner.contains(el));
@@ -240,7 +229,6 @@
       inner.appendChild(el);
     });
 
-    // also move any cards still inside block but outside inner
     Array.from(block.querySelectorAll(cfg.cardSelector)).forEach(el => {
       if (!inner.contains(el)) {
         el.classList.add('omni-card--mounted');
@@ -260,12 +248,10 @@
     let cards = Array.from(stage.querySelectorAll(cfg.cardSelector));
     if (!stage || cards.length === 0) return;
 
-    // block dragstart on stage (capture)
     stage.addEventListener('dragstart', function(e) {
       if (e.target && e.target.tagName === 'IMG') e.preventDefault();
     }, true);
 
-    // clear old rows
     Array.from(stage.querySelectorAll('.omni-3d-row')).forEach(r => {
       Array.from(r.children).forEach(ch => stage.appendChild(ch));
       r.remove();
@@ -273,7 +259,6 @@
 
     cards = Array.from(stage.querySelectorAll(cfg.cardSelector));
 
-    // create rows
     const rows = Math.max(1, cfg.rows);
     const rowsContainers = [];
     for (let r = 0; r < rows; r++) {
@@ -287,7 +272,6 @@
       rowsContainers.push(rowDiv);
     }
 
-    // distribute originals
     if (cards.length >= rows) {
       cards.forEach((card, idx) => {
         const rowIndex = idx % rows;
@@ -313,7 +297,6 @@
       });
     }
 
-    // helper functions
     function computeSizes() {
       let rectRaw = block.getBoundingClientRect();
 
@@ -338,7 +321,6 @@
         }
       }
 
-      // final fallback to computed style or defaults
       if (!rectRaw.height || rectRaw.height < 1) {
         const cs = getComputedStyle(block);
         const ch = block.clientHeight || parseFloat(cs.height) || 420;
@@ -349,7 +331,6 @@
       const rect = rectRaw;
       const minSide = Math.max(1, Math.min(rect.width, rect.height));
 
-      // NEW: если включен radiusFromParent — берем половину ширины родителя
       let radiusPx = null;
       if (cfg.radiusFromParent) {
         try {
@@ -557,7 +538,6 @@
       });
     }
 
-    // animation + scroll
     let angle = cfg.startAngle;
     let velocity = 0;
     let lastTime = performance.now();
@@ -620,7 +600,6 @@
     window.addEventListener('pointermove', onPointerMove, { passive: true });
     window.addEventListener('pointerup', onPointerUp, { passive: true });
 
-    // wheel handler (no ctrl zoom)
     block.addEventListener('wheel', (ev) => {
       let raw = ev.deltaY;
       if (ev.deltaMode === 1) raw *= 16;
@@ -638,8 +617,6 @@
       if (e.key === 'Home') angle = cfg.startAngle;
     });
 
-
-    // API
     block.omni3d = {
       next() {
         const counts = rowsContainers.map(r => r.querySelectorAll(cfg.cardSelector).length);
@@ -683,11 +660,9 @@
         return { mode: cfg.scrollMode, speed: cfg.scrollSpeed, invert: cfg.scrollInvert, inertia: cfg.scrollInertia };
       },
       destroy() {
-        // удаляем установленные обработчики, связанные с этим блоком
         try { block.removeEventListener('pointerdown', onPointerDown); } catch(e){}
         try { window.removeEventListener('pointermove', onPointerMove); } catch(e){}
         try { window.removeEventListener('pointerup', onPointerUp); } catch(e){}
-        // note: anonymous handlers (wheel/keydown) не удаляются здесь
       }
     };
 
@@ -704,5 +679,6 @@
     document.addEventListener('DOMContentLoaded', initAll);
   else
     initAll();
+
 
 })();
