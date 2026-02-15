@@ -213,7 +213,11 @@
     }
     
     let allCandidates;
-    try { allCandidates = Array.from(block.parentElement.querySelectorAll(cfg.cardSelector)); } catch (e) { allCandidates = []; }
+    try { 
+        /* ИЗМЕНЕНИЕ: Ограничиваем поиск текущим рекордом Tilda (.t-rec) */
+        const scope = block.closest('.t-rec') || block.parentElement;
+        allCandidates = Array.from(scope.querySelectorAll(cfg.cardSelector)); 
+    } catch (e) { allCandidates = []; }
     const candidatesToMove = allCandidates.filter(el => !inner.contains(el));
 
     candidatesToMove.forEach(el => {
@@ -382,7 +386,6 @@
     }
 
     function ensureEachRowHasSource(rowsContainers) {
-      /* ИЗМЕНЕНИЕ 2: Ищем источник только внутри текущего контейнера рядов */
       let sourceRow = rowsContainers.find(r => r.querySelectorAll(cfg.cardSelector).length > 0);
       if (!sourceRow) return;
       rowsContainers.forEach(rDiv => {
@@ -412,7 +415,6 @@
       ensureEachRowHasSource(rowsContainers);
 
       rowsContainers.forEach((rDiv, rIdx) => {
-        /* ИЗМЕНЕНИЕ 3: Считаем карточки только этого конкретного ряда */
         let current = Array.from(rDiv.querySelectorAll(cfg.cardSelector));
         if (current.length === 0) return;
 
@@ -681,6 +683,5 @@
     document.addEventListener('DOMContentLoaded', initAll);
   else
     initAll();
-
 
 })();
