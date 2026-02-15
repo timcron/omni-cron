@@ -670,10 +670,12 @@
     positionCards();
   }
 
-  function initAll() {
-    const nodes = document.querySelectorAll('.omni-3d-carousel');
-    nodes.forEach(n => initCarousel(n));
-  }
+function initAll() {
+  const nodes = document.querySelectorAll('.omni-3d-carousel');
+  nodes.forEach(n => {
+    setTimeout(() => initCarousel(n), 500);
+  });
+}
 
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', initAll);
@@ -682,4 +684,5 @@
 
 
 })();
+
 
