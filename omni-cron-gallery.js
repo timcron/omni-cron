@@ -1,3 +1,4 @@
+
 (function() {
   'use strict';
 
@@ -211,13 +212,8 @@
       inner.style.pointerEvents = 'none';
       block.insertBefore(inner, block.firstChild);
     }
-    
-    /* ТОЧЕЧНОЕ ИЗМЕНЕНИЕ: Ищем только в границах ТЕКУЩЕГО блока Tilda */
-    let allCandidates = [];
-    try { 
-        const scope = block.closest('.t-rec') || block.parentElement;
-        allCandidates = Array.from(scope.querySelectorAll(cfg.cardSelector)); 
-    } catch (e) { allCandidates = []; }
+    let allCandidates;
+    try { allCandidates = Array.from(document.querySelectorAll(cfg.cardSelector)); } catch (e) { allCandidates = []; }
     const candidatesToMove = allCandidates.filter(el => !inner.contains(el));
 
     candidatesToMove.forEach(el => {
@@ -304,6 +300,7 @@
     function computeSizes() {
       let rectRaw = block.getBoundingClientRect();
 
+      // Safari/edge cases: если rect.height мал или 0 — пробуем offset/client/parent
       if (!rectRaw.height || rectRaw.height < 1) {
         const offsetH = block.offsetHeight || block.clientHeight || 0;
         if (offsetH > 0) {
@@ -635,6 +632,37 @@
         const counts = rowsContainers.map(r => r.querySelectorAll(cfg.cardSelector).length);
         const avg = Math.max(1, Math.round(counts.reduce((a,b)=>a+b,0)/counts.length));
         angle = - (360 / avg) * i;
+      },
+      setRotation(x, y, z) {
+        if (typeof x === 'number') cfg.rotateX = x;
+        if (typeof y === 'number') cfg.rotateY = y;
+        if (typeof z === 'number') cfg.rotateZ = z;
+        applyInnerRotation();
+      },
+      getRotation() {
+        return { x: cfg.rotateX, y: cfg.rotateY, z: cfg.rotateZ };
+      },
+      setWheelConfig(speed, invert, inertia) {
+        if (typeof speed === 'number') cfg.wheelSpeed = speed;
+        if (typeof invert === 'boolean') cfg.wheelInvert = invert;
+        if (typeof inertia === 'number') cfg.wheelInertia = inertia;
+      },
+      getWheelConfig() {
+        return { speed: cfg.wheelSpeed, invert: cfg.wheelInvert, inertia: cfg.wheelInertia };
+      },
+      setScrollConfig(mode, speed, invert, inertia) {
+        if (typeof mode === 'string') cfg.scrollMode = mode;
+        if (typeof speed === 'number') cfg.scrollSpeed = speed;
+        if (typeof invert === 'boolean') cfg.scrollInvert = invert;
+        if (typeof inertia === 'number') cfg.scrollInertia = inertia;
+      },
+      getScrollConfig() {
+        return { mode: cfg.scrollMode, speed: cfg.scrollSpeed, invert: cfg.scrollInvert, inertia: cfg.scrollInertia };
+      },
+      destroy() {
+        try { block.removeEventListener('pointerdown', onPointerDown); } catch(e){}
+        try { window.removeEventListener('pointermove', onPointerMove); } catch(e){}
+        try { window.removeEventListener('pointerup', onPointerUp); } catch(e){}
       }
     };
 
@@ -652,4 +680,6 @@
   else
     initAll();
 
+
 })();
+
